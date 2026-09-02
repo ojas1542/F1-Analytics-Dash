@@ -1,0 +1,7 @@
+FROM apache/airflow:2.9.3-python3.11
+
+COPY requirements-batch.txt /requirements-batch.txt
+
+RUN pip install --no-cache-dir \
+        -r /requirements-batch.txt \
+        dbt-snowflake==1.8.4

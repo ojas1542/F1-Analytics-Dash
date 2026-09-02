@@ -1,0 +1,13 @@
+f1_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'F1_ANALYTICS') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'F1_WH') }}"
+      schema: "{{ env_var('SNOWFLAKE_ANALYTICS_SCHEMA', 'ANALYTICS') }}"
+      threads: 4
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE', '') }}"

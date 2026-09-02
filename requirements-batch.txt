@@ -1,0 +1,6 @@
+# Dependencies for the historical batch pipeline (historical_race_batch.py,
+# dags/f1_historical_batch_dag.py). apache-airflow and dbt-snowflake are
+# installed separately in the Airflow/dbt runtime images, not pinned here.
+requests
+snowflake-connector-python
+cryptography

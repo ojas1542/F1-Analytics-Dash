@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+telemetryConsumer/target/
+telemetryConsumer/Cargo.lock
+.DS_Store
+.env

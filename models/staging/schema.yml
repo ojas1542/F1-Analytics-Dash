@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw_f1
+    database: F1_ANALYTICS
+    schema: RAW
+    tables:
+      - name: raw_car_data
+      - name: raw_laps
+      - name: raw_pit
+      - name: raw_race_control

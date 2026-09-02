@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets / local env
+.env
+secrets/*
+!secrets/.gitkeep
+
+# Kafka Connect config with embedded Snowflake credentials/private key
+snowflake-sink-connector.json
+
+# dbt
+target/
+logs/
+dbt_packages/
+.user.yml
+
+# Batch pipeline landing zone (regenerated from OpenF1 on each run)
+data/raw/
+
+# Rust build artifacts
+telemetryConsumer/target/
+
+# OS
+.DS_Store

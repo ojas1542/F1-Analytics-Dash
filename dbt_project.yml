@@ -1,0 +1,12 @@
+name: 'f1_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'f1_analytics'
+
+model-paths: ["models"]
+
+models:
+  f1_analytics:
+    staging:
+      +materialized: view
