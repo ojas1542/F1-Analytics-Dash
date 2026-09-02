@@ -217,6 +217,25 @@ services:
     depends_on:
       - telemetry-consumer
 
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Dashboard refresh dropdowns are capped by this server-side floor
+      # regardless of what a dashboard's own "refresh" field requests.
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
 volumes:
   airflow-postgres-data:
   airflow-logs:
+  grafana-data:
