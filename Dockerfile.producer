@@ -6,6 +6,6 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir kafka-python requests
 
-COPY telemetryIngester.py historicraceproducer.py ./
+COPY telemetryIngester.py historicraceproducer.py telemetryProducer.py ./
 
 CMD ["python", "historicraceproducer.py"]

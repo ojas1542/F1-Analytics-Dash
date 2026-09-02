@@ -105,6 +105,11 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   historic-producer:
     build:
@@ -112,11 +117,95 @@ services:
       dockerfile: Dockerfile.producer
     container_name: historic-producer
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     profiles:
       - producer
+
+  live-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    container_name: live-producer
+    command: ["python", "telemetryProducer.py"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      OPENF1_API_TOKEN: ${OPENF1_API_TOKEN:-}
+      SESSION_YEAR: ${SESSION_YEAR:-}
+      SESSION_COUNTRY: ${SESSION_COUNTRY:-}
+      SESSION_NAME: ${SESSION_NAME:-}
+    profiles:
+      - live
+
+  telemetry-consumer:
+    build:
+      context: ./telemetryConsumer
+    container_name: telemetry-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      METRICS_PORT: "9184"
+      RUST_LOG: info
+    ports:
+      - "9184:9184"
+
+  kafka-connect:
+    build:
+      context: ./connect
+      dockerfile: Dockerfile
+    container_name: kafka-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: f1-connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_PLUGIN_PATH: /usr/share/confluent-hub-components
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  connector-init:
+    build:
+      context: ./connect
+      dockerfile: register.Dockerfile
+    container_name: connector-init
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    environment:
+      CONNECT_URL: http://kafka-connect:8083
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+      SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE}
+      SNOWFLAKE_SCHEMA: ${SNOWFLAKE_SCHEMA}
+      SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: ${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE:-}
+      SNOWFLAKE_PRIVATE_KEY_PATH: /secrets/snowflake_key.p8
+    volumes:
+      - ./secrets:/secrets:ro
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -125,8 +214,8 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      - telemetry-consumer
 
 volumes:
   airflow-postgres-data:

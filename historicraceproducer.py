@@ -125,7 +125,7 @@ try:
 
     sessions = client.get_sessions(
         year=2025,
-        country_name="Belgium",
+        country_name="Japan",
         session_name="Race"
     )
 
