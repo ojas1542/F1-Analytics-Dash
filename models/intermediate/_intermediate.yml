@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: int_laps_enriched
+    description: >
+      Lap-grain fact enriched with session/meeting/driver dimensions and
+      pit-stop info, with lap-validity and stint-number derived once for
+      downstream marts to reuse.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: lap_number
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [session_key, driver_number, lap_number]

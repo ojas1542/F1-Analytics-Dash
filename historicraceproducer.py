@@ -125,7 +125,7 @@ try:
 
     sessions = client.get_sessions(
         year=2025,
-        country_name="Japan",
+        country_name="Las Vegas",
         session_name="Race"
     )
 
@@ -333,6 +333,46 @@ try:
 
 
     # ========================================================
+    # 9b. Download PIT STOPS
+    #
+    # NO DATE FILTER.
+    # ========================================================
+
+    print("\n==============================")
+    print("DOWNLOADING PIT STOPS")
+    print("==============================")
+
+    limiter.wait_and_record()
+
+    pit_records = client.get_pit(
+        session_key=session_key
+    )
+
+    pit_events = []
+
+    for record in pit_records:
+
+        dt = parse_dt(
+            record.get("date")
+        )
+
+        if dt is None:
+            continue
+
+        if start_time <= dt <= end_time:
+
+            pit_events.append(
+                (dt, record)
+            )
+
+
+    print(
+        f"Total pit stops: "
+        f"{len(pit_events):,}"
+    )
+
+
+    # ========================================================
     # 10. Sort Everything
     # ========================================================
 
@@ -347,6 +387,10 @@ try:
     )
 
     lap_events.sort(
+        key=lambda x: x[0]
+    )
+
+    pit_events.sort(
         key=lambda x: x[0]
     )
 
@@ -395,6 +439,7 @@ try:
     car_index = 0
     rc_index = 0
     lap_index = 0
+    pit_index = 0
 
     sim_current_time = start_time
 
@@ -498,6 +543,33 @@ try:
 
 
         # ====================================================
+        # PIT STOPS
+        # ====================================================
+
+        pit_count = 0
+
+        while (
+            pit_index < len(pit_events)
+            and pit_events[pit_index][0] < sim_next_time
+        ):
+
+            event_time, record = pit_events[pit_index]
+
+            if event_time >= sim_current_time:
+
+                send_event(
+                    producer,
+                    "pit",
+                    record.get("driver_number"),
+                    record
+                )
+
+                pit_count += 1
+
+            pit_index += 1
+
+
+        # ====================================================
         # Flush Kafka periodically
         # ====================================================
 
@@ -508,7 +580,8 @@ try:
             f"[{sim_current_time.strftime('%H:%M:%S')}] "
             f"car={car_count:,} "
             f"rc={rc_count} "
-            f"laps={lap_count}"
+            f"laps={lap_count} "
+            f"pit={pit_count}"
         )
 
 

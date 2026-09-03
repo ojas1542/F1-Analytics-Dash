@@ -55,6 +55,9 @@ docker compose exec airflow-webserver airflow dags trigger f1_historical_batch
 # OR replay a specific historical race straight to Kafka
 docker compose --profile producer up -d historic-producer
 
+docker exec airflow-webserver airflow dags trigger f1_historical_batch \
+  --conf '{"start_year": 2023, "end_year": 2025}'
+
 # OR stream whatever F1 session is currently live
 docker compose --profile live up -d live-producer
 ```

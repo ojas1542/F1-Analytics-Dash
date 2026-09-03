@@ -37,7 +37,22 @@ DATASET_TO_TABLE = {
     "laps": "raw_laps",
     "pit": "raw_pit",
     "race_control": "raw_race_control",
+    "drivers": "raw_drivers",
+    "sessions": "raw_sessions",
+    "meetings": "raw_meetings",
 }
+
+# Most datasets are landed one file per race session, keyed by session_key.
+# sessions/meetings are reference data fetched once per year instead.
+DATASET_KEY_FIELD = {
+    "sessions": "extract_year",
+    "meetings": "extract_year",
+}
+
+
+def dataset_key_field(dataset: str) -> str:
+    return DATASET_KEY_FIELD.get(dataset, "session_key")
+
 
 RACE_SESSION_NAME = "Race"
 
@@ -57,8 +72,9 @@ def list_race_session_keys(start_year: int, end_year: int) -> list[int]:
     return session_keys
 
 
-def fetch_car_data_for_session(client: OpenF1Client, session_key: int) -> list[dict[str, Any]]:
-    drivers = client.get_drivers(session_key=session_key)
+def fetch_car_data_for_session(
+    client: OpenF1Client, session_key: int, drivers: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     all_records: list[dict[str, Any]] = []
 
     for driver in drivers:
@@ -88,7 +104,14 @@ def fetch_session_records(client: OpenF1Client, session_key: int) -> dict[str, l
     datasets: dict[str, list[dict[str, Any]]] = {}
 
     try:
-        datasets["car_data"] = fetch_car_data_for_session(client, session_key)
+        drivers = client.get_drivers(session_key=session_key)
+    except Exception:
+        logger.exception("Failed to fetch drivers for session_key=%s", session_key)
+        drivers = []
+    datasets["drivers"] = drivers
+
+    try:
+        datasets["car_data"] = fetch_car_data_for_session(client, session_key, drivers)
     except Exception:
         logger.exception("Failed to fetch car_data for session_key=%s", session_key)
         datasets["car_data"] = []
@@ -103,6 +126,35 @@ def fetch_session_records(client: OpenF1Client, session_key: int) -> dict[str, l
     return datasets
 
 
+def fetch_and_extract_year_dimensions(
+    client: OpenF1Client, year: int, run_id: str
+) -> dict[str, str]:
+    """Fetch year-grain dimension datasets (sessions, meetings) and land them locally.
+
+    Unlike per-session datasets, these describe the whole season and are
+    fetched once per year rather than once per session_key.
+    """
+    try:
+        sessions = client.get_sessions(year=year)
+    except OpenF1Error:
+        logger.exception("Failed to fetch sessions for year=%s", year)
+        sessions = []
+
+    try:
+        meetings = client.get_meetings(year=year)
+    except OpenF1Error:
+        logger.exception("Failed to fetch meetings for year=%s", year)
+        meetings = []
+
+    written: dict[str, str] = {}
+    for dataset_name, records in (("sessions", sessions), ("meetings", meetings)):
+        path = write_records_to_local(dataset_name, year, records, run_id)
+        if path:
+            written[dataset_name] = str(path)
+
+    return written
+
+
 # -- local disk landing ---------------------------------------------------
 
 def get_raw_data_dir() -> Path:
@@ -111,29 +163,33 @@ def get_raw_data_dir() -> Path:
     return path.resolve()
 
 
-def local_path_for(dataset: str, session_key: int, run_id: str) -> Path:
-    return get_raw_data_dir() / dataset / f"session_key={session_key}" / f"{run_id}.ndjson.gz"
+def local_path_for(dataset: str, key_value: int, run_id: str) -> Path:
+    key_field = dataset_key_field(dataset)
+    return get_raw_data_dir() / dataset / f"{key_field}={key_value}" / f"{run_id}.ndjson.gz"
 
 
-def _write_ndjson_gz(path: Path, records: Iterable[dict[str, Any]], session_key: int) -> None:
+def _write_ndjson_gz(
+    path: Path, records: Iterable[dict[str, Any]], key_field: str, key_value: int
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, mode="wt", encoding="utf-8") as gz:
         for record in records:
-            gz.write(json.dumps({"session_key": str(session_key), "record_content": record}) + "\n")
+            gz.write(json.dumps({key_field: str(key_value), "record_content": record}) + "\n")
 
 
 def write_records_to_local(
     dataset: str,
-    session_key: int,
+    key_value: int,
     records: list[dict[str, Any]],
     run_id: str,
 ) -> Path | None:
     if not records:
         return None
 
-    path = local_path_for(dataset, session_key, run_id)
-    _write_ndjson_gz(path, records, session_key)
-    logger.info("Wrote %d %s records for session_key=%s to %s", len(records), dataset, session_key, path)
+    key_field = dataset_key_field(dataset)
+    path = local_path_for(dataset, key_value, run_id)
+    _write_ndjson_gz(path, records, key_field, key_value)
+    logger.info("Wrote %d %s records for %s=%s to %s", len(records), dataset, key_field, key_value, path)
     return path
 
 
@@ -234,11 +290,15 @@ def put_dataset_files_to_stage(
     return len(files)
 
 
-def ensure_raw_table(conn: snowflake.connector.SnowflakeConnection, qualified_table_name: str) -> None:
+def ensure_raw_table(
+    conn: snowflake.connector.SnowflakeConnection,
+    qualified_table_name: str,
+    key_column: str = "session_key",
+) -> None:
     conn.cursor().execute(
         f"""
         CREATE TABLE IF NOT EXISTS {qualified_table_name} (
-            session_key VARCHAR,
+            {key_column} VARCHAR,
             record_content VARCHAR
         )
         """
@@ -255,14 +315,15 @@ def load_dataset_to_snowflake(
     schema = os.environ.get("SNOWFLAKE_SCHEMA", "RAW")
     table_name = DATASET_TO_TABLE[dataset]
     qualified_table_name = f"{db}.{schema}.{table_name}"
+    key_column = dataset_key_field(dataset)
 
-    ensure_raw_table(conn, qualified_table_name)
+    ensure_raw_table(conn, qualified_table_name, key_column=key_column)
 
     conn.cursor().execute(
         f"""
-        COPY INTO {qualified_table_name} (session_key, record_content)
+        COPY INTO {qualified_table_name} ({key_column}, record_content)
         FROM (
-            SELECT $1:session_key::string, TO_JSON($1:record_content)
+            SELECT $1:{key_column}::string, TO_JSON($1:record_content)
             FROM @{stage_name}/{dataset}/
         )
         FILE_FORMAT = (TYPE = JSON, COMPRESSION = 'GZIP')
@@ -297,6 +358,9 @@ def run(start_year: int, end_year: int, run_id: str | None = None) -> None:
     client = OpenF1Client()
     for session_key in session_keys:
         extract_session_locally(session_key, run_id, client=client)
+
+    for year in range(start_year, end_year + 1):
+        fetch_and_extract_year_dimensions(client, year, run_id)
 
     load_all_datasets_to_snowflake()
 

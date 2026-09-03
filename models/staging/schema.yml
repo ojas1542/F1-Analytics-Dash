@@ -5,7 +5,103 @@ sources:
     database: F1_ANALYTICS
     schema: RAW
     tables:
+      # Batch loader (historical_race_batch.py) -- session/year-grain, JSON string record_content
       - name: raw_car_data
       - name: raw_laps
       - name: raw_pit
       - name: raw_race_control
+      - name: raw_drivers
+      - name: raw_sessions
+      - name: raw_meetings
+      # Kafka Connect Snowflake streaming sink -- VARIANT record_content, no streaming
+      # equivalent for drivers/sessions/meetings (not published to a Kafka topic)
+      - name: raw_car_telemetry
+      - name: raw_lap_data
+      - name: raw_pit_stops
+
+models:
+  - name: stg_car_data
+    description: >
+      One row per car-telemetry sample (session, driver, timestamp), unioned
+      from the batch-loaded and streaming-sunk raw tables.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: source_system
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['batch', 'streaming']
+
+  - name: stg_laps
+    description: >
+      One row per session/driver/lap, unioned from the batch-loaded and
+      streaming-sunk raw tables, deduplicated on the natural key.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: lap_number
+        tests: [not_null]
+      - name: source_system
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['batch', 'streaming']
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [session_key, driver_number, lap_number, source_system]
+
+  - name: stg_pit
+    description: >
+      One row per pit stop, unioned from the batch-loaded and streaming-sunk
+      raw tables, deduplicated on the natural key.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [session_key, driver_number, lap_number, source_system]
+
+  - name: stg_race_control
+    description: >
+      One row per race-control event (flags, safety car, penalties, messages).
+      No natural uniqueness key -- multiple events can share a timestamp.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: event_at
+        tests: [not_null]
+
+  - name: stg_drivers
+    description: >
+      One row per session/driver roster entry (bio + team at that session).
+      Batch-only -- OpenF1's drivers endpoint has no streaming equivalent.
+    columns:
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [session_key, driver_number]
+
+  - name: stg_sessions
+    description: >
+      One row per race-weekend session (practice/quali/sprint/race).
+      Batch-only, landed once per season.
+    columns:
+      - name: session_key
+        tests: [unique, not_null]
+
+  - name: stg_meetings
+    description: >
+      One row per race weekend (meeting). Batch-only, landed once per season.
+    columns:
+      - name: meeting_key
+        tests: [unique, not_null]

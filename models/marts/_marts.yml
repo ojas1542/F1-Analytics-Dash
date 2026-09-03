@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: fct_race_pace
+    description: >
+      Race pace and consistency per driver per session: average/best/variance
+      of lap times, a linear-regression degradation slope, stint and pit
+      counts.
+    columns:
+      - name: driver_session_key
+        tests: [unique, not_null]
+      - name: session_key
+        tests: [not_null]
+      - name: driver_number
+        tests: [not_null]
+
+  - name: mart_driver_season_summary
+    description: >
+      Per-driver, per-season rollup built on fct_race_pace: volume-weighted
+      average pace and consistency, pit efficiency, and a rough
+      race-control-derived incident count.
+    columns:
+      - name: driver_season_key
+        tests: [unique, not_null]
+      - name: driver_number
+        tests: [not_null]
+      - name: season_year
+        tests: [not_null]

@@ -1,16 +1,16 @@
--- models/staging/stg_laps.sql
+-- models/staging/stg_pit.sql
 --
--- Unions the batch loader's raw_laps (VARCHAR record_content, needs
--- parse_json) with the streaming sink's raw_lap_data (VARIANT
+-- Unions the batch loader's raw_pit (VARCHAR record_content, needs
+-- parse_json) with the streaming sink's raw_pit_stops (VARIANT
 -- record_content, already parsed). See stg_car_data.sql for the same
 -- pattern with more detail.
 
 with batch_source as (
-    select * from {{ source('raw_f1', 'raw_laps') }}
+    select * from {{ source('raw_f1', 'raw_pit') }}
 ),
 
 streaming_source as (
-    select * from {{ source('raw_f1', 'raw_lap_data') }}
+    select * from {{ source('raw_f1', 'raw_pit_stops') }}
 ),
 
 batch_parsed as (
@@ -36,10 +36,7 @@ unioned as (
 ),
 
 deduped as (
-    -- COPY INTO is append-only (no truncate) so re-running a batch backfill
-    -- over overlapping sessions re-lands the same laps; keep one row each
-    -- per source_system (batch and streaming are expected to overlap when
-    -- a session is both backfilled and live-replayed).
+    -- See stg_laps.sql for why dedup is needed here.
     select session_key, source_system, payload
     from unioned
     qualify row_number() over (
@@ -57,10 +54,7 @@ select
     source_system,
     try_cast(payload:driver_number::string as integer) as driver_number,
     try_cast(payload:lap_number::string as integer) as lap_number,
-    try_cast(payload:lap_duration::string as float) as lap_duration_seconds,
-    try_cast(payload:duration_sector_1::string as float) as s1_duration_seconds,
-    try_cast(payload:duration_sector_2::string as float) as s2_duration_seconds,
-    try_cast(payload:duration_sector_3::string as float) as s3_duration_seconds,
-    try_cast(payload:is_pit_out_lap::string as boolean) as is_pit_out_lap,
-    try_cast(payload:date_start::string as timestamp_tz) as lap_started_at
+    try_cast(payload:date::string as timestamp_tz) as pit_at,
+    try_cast(payload:pit_duration::string as float) as pit_duration_seconds,
+    try_cast(payload:meeting_key::string as integer) as meeting_key
 from deduped

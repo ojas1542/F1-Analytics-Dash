@@ -10,6 +10,10 @@
   "snowflake.private.key.passphrase": "${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}",
   "snowflake.database.name": "${SNOWFLAKE_DATABASE}",
   "snowflake.schema.name": "${SNOWFLAKE_SCHEMA}",
+  "snowflake.role.name": "${SNOWFLAKE_ROLE}",
+
+  "snowflake.streaming.validate.compatibility.with.classic": "false",
+  "snowflake.enable.schematization": "false",
 
   "snowflake.topic2table.map": "car_data:raw_car_telemetry,race_control:raw_race_control,laps:raw_lap_data,pit:raw_pit_stops",
 

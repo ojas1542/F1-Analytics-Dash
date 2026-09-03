@@ -5,9 +5,11 @@ Kafka Connect's Snowflake sink streams car_data/laps/pit/race_control
 straight into the raw tables (from historic-producer's replay or
 live-producer's live sim) without ever invoking dbt -- only the
 f1_historical_batch DAG's own COPY INTO step triggers a dbt run, and only
-for that batch path. This DAG just rebuilds the staging models on a
-fixed interval so data arriving via Kafka gets picked up too, independent
-of which producer put it there.
+for that batch path. This DAG just rebuilds every model (staging through
+marts) on a fixed interval so data arriving via Kafka gets picked up too,
+independent of which producer put it there. `dbt build` (not `dbt run`) so
+schema tests execute as a pipeline gate, not just dead schema.yml
+declarations; `dbt deps` first since packages aren't vendored.
 """
 
 from __future__ import annotations
@@ -32,7 +34,10 @@ PROJECT_DIR = "/opt/airflow/project"
 def f1_dbt_refresh():
     BashOperator(
         task_id="dbt_run",
-        bash_command=f"dbt run --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR}",
+        bash_command=(
+            f"dbt deps --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR} && "
+            f"dbt build --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR}"
+        ),
     )
 
 
