@@ -1,5 +1,5 @@
 {#
-    dbt's default generate_schema_name concatenates <target_schema>_<custom_schema>
+    dbt's default generate_schema_name concatenates target and custom schemas.
     (e.g. "ANALYTICS_marts"). Override it so a model's +schema config names the
     schema exactly, giving staging/intermediate/marts clean physical separation.
 #}

@@ -22,10 +22,14 @@ aggregated as (
         any_value(driver_full_name) as driver_full_name,
         any_value(team_name) as team_name,
 
-        -- Pace stats exclude in/out/pit laps (see int_laps_enriched.is_valid_lap)
-        avg(case when is_valid_lap then lap_duration_seconds end) as avg_lap_duration_seconds,
-        min(case when is_valid_lap then lap_duration_seconds end) as min_lap_duration_seconds,
-        stddev(case when is_valid_lap then lap_duration_seconds end) as stddev_lap_duration_seconds,
+        -- Pace stats exclude in/out/pit laps.
+        -- See int_laps_enriched.is_valid_lap.
+        avg(case when is_valid_lap then lap_duration_seconds end)
+            as avg_lap_duration_seconds,
+        min(case when is_valid_lap then lap_duration_seconds end)
+            as min_lap_duration_seconds,
+        stddev(case when is_valid_lap then lap_duration_seconds end)
+            as stddev_lap_duration_seconds,
 
         -- Linear-regression slope of lap time vs. lap number: positive =
         -- getting slower (degrading) over the session/stint, negative =
@@ -46,7 +50,9 @@ aggregated as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['session_key', 'driver_number']) }} as driver_session_key,
+    {{
+        dbt_utils.generate_surrogate_key(['session_key', 'driver_number'])
+    }} as driver_session_key,
     session_key,
     driver_number,
     driver_full_name,
@@ -61,7 +67,8 @@ select
     min_lap_duration_seconds,
     stddev_lap_duration_seconds,
     -- Consistency score: lower = more consistent lap times.
-    stddev_lap_duration_seconds / nullif(avg_lap_duration_seconds, 0) as lap_time_coefficient_of_variation,
+    stddev_lap_duration_seconds / nullif(avg_lap_duration_seconds, 0)
+        as lap_time_coefficient_of_variation,
     degradation_slope_seconds_per_lap,
     stint_count,
     valid_lap_count,

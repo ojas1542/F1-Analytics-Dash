@@ -72,7 +72,11 @@ enriched as (
 
 select
     *,
-    (lap_duration_seconds is not null and not is_pit_out_lap and not is_pit_lap) as is_valid_lap,
+    (
+        lap_duration_seconds is not null
+        and not is_pit_out_lap
+        and not is_pit_lap
+    ) as is_valid_lap,
     1 + sum(case when is_pit_out_lap then 1 else 0 end) over (
         partition by session_key, driver_number
         order by lap_number

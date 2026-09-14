@@ -37,11 +37,15 @@ from telemetryIngester import OpenF1Client  # noqa: E402
 
 @dag(
     dag_id="f1_historical_batch",
-    description="OpenF1 -> local disk -> Snowflake -> dbt historical batch load",
-    schedule=None,  # manually triggered backfills only -- see `airflow dags trigger --conf`
+    description=(
+        "OpenF1 -> local disk -> Snowflake -> dbt historical batch load"
+    ),
+    # Manually triggered backfills only. See `airflow dags trigger --conf`.
+    schedule=None,
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    max_active_tasks=4,  # LocalExecutor on a resource-capped Docker Desktop VM; keep concurrent OpenF1 fetches low
+    # Limit OpenF1 fetch concurrency on resource-capped Docker Desktop VMs.
+    max_active_tasks=4,
     params={"start_year": 2023, "end_year": 2025},
     tags=["f1", "batch", "openf1", "snowflake", "dbt"],
 )
@@ -78,15 +82,21 @@ def f1_historical_batch():
     batch_id = new_batch_id()
     session_keys = list_sessions()
     years = list_years()
-    extracted = extract_locally.partial(batch_id=batch_id).expand(session_key=session_keys)
-    extracted_dims = extract_dimensions.partial(batch_id=batch_id).expand(year=years)
+    extracted = extract_locally.partial(batch_id=batch_id).expand(
+        session_key=session_keys
+    )
+    extracted_dims = extract_dimensions.partial(batch_id=batch_id).expand(
+        year=years
+    )
     loaded = load_to_snowflake(extracted, extracted_dims)
 
     dbt_run = BashOperator(
         task_id="dbt_run",
         bash_command=(
-            f"dbt deps --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR} && "
-            f"dbt build --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR}"
+            f"dbt deps --project-dir {PROJECT_DIR} "
+            f"--profiles-dir {PROJECT_DIR} && "
+            f"dbt build --project-dir {PROJECT_DIR} "
+            f"--profiles-dir {PROJECT_DIR}"
         ),
     )
 

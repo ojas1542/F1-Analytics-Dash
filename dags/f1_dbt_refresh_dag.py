@@ -24,7 +24,10 @@ PROJECT_DIR = "/opt/airflow/project"
 
 @dag(
     dag_id="f1_dbt_refresh",
-    description="Rebuild dbt staging models on a fixed interval, regardless of ingestion path",
+    description=(
+        "Rebuild dbt staging models on a fixed interval, regardless of "
+        "ingestion path"
+    ),
     schedule="*/15 * * * *",
     start_date=datetime(2024, 1, 1),
     catchup=False,
@@ -35,8 +38,10 @@ def f1_dbt_refresh():
     BashOperator(
         task_id="dbt_run",
         bash_command=(
-            f"dbt deps --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR} && "
-            f"dbt build --project-dir {PROJECT_DIR} --profiles-dir {PROJECT_DIR}"
+            f"dbt deps --project-dir {PROJECT_DIR} "
+            f"--profiles-dir {PROJECT_DIR} && "
+            f"dbt build --project-dir {PROJECT_DIR} "
+            f"--profiles-dir {PROJECT_DIR}"
         ),
     )
 

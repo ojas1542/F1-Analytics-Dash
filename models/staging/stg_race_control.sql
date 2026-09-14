@@ -19,7 +19,10 @@ parsed as (
 )
 
 select
-    coalesce(session_key, try_cast(payload:session_key::string as string)) as session_key,
+    coalesce(
+        session_key,
+        try_cast(payload:session_key::string as string)
+    ) as session_key,
     try_cast(payload:date::string as timestamp_tz) as event_at,
     payload:category::string as category,
     payload:flag::string as flag_type,

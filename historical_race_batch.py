@@ -64,7 +64,9 @@ def list_race_session_keys(start_year: int, end_year: int) -> list[int]:
     session_keys: list[int] = []
 
     for year in range(start_year, end_year + 1):
-        sessions = client.get_sessions(year=year, session_name=RACE_SESSION_NAME)
+        sessions = client.get_sessions(
+            year=year, session_name=RACE_SESSION_NAME
+        )
         keys_for_year = [s["session_key"] for s in sessions]
         logger.info("Found %d race sessions for %d", len(keys_for_year), year)
         session_keys.extend(keys_for_year)
@@ -80,11 +82,14 @@ def fetch_car_data_for_session(
     for driver in drivers:
         driver_number = driver["driver_number"]
         try:
-            records = client.get_car_data(session_key=session_key, driver_number=driver_number)
+            records = client.get_car_data(
+                session_key=session_key, driver_number=driver_number
+            )
             all_records.extend(records)
         except OpenF1Error:
             logger.exception(
-                "Failed to fetch car_data for session_key=%s driver=%s; skipping",
+                "Failed to fetch car_data for session_key=%s "
+                "driver=%s; skipping",
                 session_key,
                 driver_number,
             )
@@ -93,8 +98,13 @@ def fetch_car_data_for_session(
     return all_records
 
 
-def fetch_session_records(client: OpenF1Client, session_key: int) -> dict[str, list[dict[str, Any]]]:
-    """Fetch every dataset for one race session. Returns {dataset_name: [records]}."""
+def fetch_session_records(
+    client: OpenF1Client, session_key: int
+) -> dict[str, list[dict[str, Any]]]:
+    """Fetch every dataset for one race session.
+
+    Returns {dataset_name: [records]}.
+    """
     simple_fetchers = {
         "laps": client.get_laps,
         "pit": client.get_pit,
@@ -106,21 +116,31 @@ def fetch_session_records(client: OpenF1Client, session_key: int) -> dict[str, l
     try:
         drivers = client.get_drivers(session_key=session_key)
     except Exception:
-        logger.exception("Failed to fetch drivers for session_key=%s", session_key)
+        logger.exception(
+            "Failed to fetch drivers for session_key=%s", session_key
+        )
         drivers = []
     datasets["drivers"] = drivers
 
     try:
-        datasets["car_data"] = fetch_car_data_for_session(client, session_key, drivers)
+        datasets["car_data"] = fetch_car_data_for_session(
+            client, session_key, drivers
+        )
     except Exception:
-        logger.exception("Failed to fetch car_data for session_key=%s", session_key)
+        logger.exception(
+            "Failed to fetch car_data for session_key=%s", session_key
+        )
         datasets["car_data"] = []
 
     for dataset_name, fetch in simple_fetchers.items():
         try:
             datasets[dataset_name] = fetch(session_key=session_key)
         except Exception:
-            logger.exception("Failed to fetch %s for session_key=%s", dataset_name, session_key)
+            logger.exception(
+                "Failed to fetch %s for session_key=%s",
+                dataset_name,
+                session_key,
+            )
             datasets[dataset_name] = []
 
     return datasets
@@ -129,7 +149,7 @@ def fetch_session_records(client: OpenF1Client, session_key: int) -> dict[str, l
 def fetch_and_extract_year_dimensions(
     client: OpenF1Client, year: int, run_id: str
 ) -> dict[str, str]:
-    """Fetch year-grain dimension datasets (sessions, meetings) and land them locally.
+    """Fetch year-grain dimension datasets and land them locally.
 
     Unlike per-session datasets, these describe the whole season and are
     fetched once per year rather than once per session_key.
@@ -147,7 +167,10 @@ def fetch_and_extract_year_dimensions(
         meetings = []
 
     written: dict[str, str] = {}
-    for dataset_name, records in (("sessions", sessions), ("meetings", meetings)):
+    for dataset_name, records in (
+        ("sessions", sessions),
+        ("meetings", meetings),
+    ):
         path = write_records_to_local(dataset_name, year, records, run_id)
         if path:
             written[dataset_name] = str(path)
@@ -165,16 +188,25 @@ def get_raw_data_dir() -> Path:
 
 def local_path_for(dataset: str, key_value: int, run_id: str) -> Path:
     key_field = dataset_key_field(dataset)
-    return get_raw_data_dir() / dataset / f"{key_field}={key_value}" / f"{run_id}.ndjson.gz"
+    return (
+        get_raw_data_dir()
+        / dataset
+        / f"{key_field}={key_value}"
+        / f"{run_id}.ndjson.gz"
+    )
 
 
 def _write_ndjson_gz(
-    path: Path, records: Iterable[dict[str, Any]], key_field: str, key_value: int
+    path: Path,
+    records: Iterable[dict[str, Any]],
+    key_field: str,
+    key_value: int,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, mode="wt", encoding="utf-8") as gz:
         for record in records:
-            gz.write(json.dumps({key_field: str(key_value), "record_content": record}) + "\n")
+            payload = {key_field: str(key_value), "record_content": record}
+            gz.write(json.dumps(payload) + "\n")
 
 
 def write_records_to_local(
@@ -189,7 +221,14 @@ def write_records_to_local(
     key_field = dataset_key_field(dataset)
     path = local_path_for(dataset, key_value, run_id)
     _write_ndjson_gz(path, records, key_field, key_value)
-    logger.info("Wrote %d %s records for %s=%s to %s", len(records), dataset, key_field, key_value, path)
+    logger.info(
+        "Wrote %d %s records for %s=%s to %s",
+        len(records),
+        dataset,
+        key_field,
+        key_value,
+        path,
+    )
     return path
 
 
@@ -198,15 +237,19 @@ def extract_session_locally(
     run_id: str,
     client: OpenF1Client = None,
 ) -> dict[str, str]:
-    """Fetch every dataset for one session from OpenF1 and land it on local disk.
+    """Fetch every dataset from OpenF1 and land it on local disk.
 
-    Returns {dataset_name: file_path} for datasets that produced at least one record.
+    Returns paths for datasets that produced at least one record.
     """
     client = client or OpenF1Client()
 
     written: dict[str, str] = {}
-    for dataset_name, records in fetch_session_records(client, session_key).items():
-        path = write_records_to_local(dataset_name, session_key, records, run_id)
+    for dataset_name, records in fetch_session_records(
+        client, session_key
+    ).items():
+        path = write_records_to_local(
+            dataset_name, session_key, records, run_id
+        )
         if path:
             written[dataset_name] = str(path)
 
@@ -219,9 +262,13 @@ def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
     account = os.environ.get("SNOWFLAKE_ACCOUNT")
     if not account:
         # Fall back to deriving the account locator from a JDBC-style URL,
-        # e.g. "abc12345.us-east-1.snowflakecomputing.com" -> "abc12345.us-east-1".
+        # Extract an account locator from a JDBC-style Snowflake URL.
         url = os.environ["SNOWFLAKE_URL"]
-        account = url.replace("https://", "").replace("http://", "").split(".snowflakecomputing.com")[0]
+        account = (
+            url.replace("https://", "")
+            .replace("http://", "")
+            .split(".snowflakecomputing.com")[0]
+        )
 
     connect_kwargs: dict[str, Any] = {
         "account": account,
@@ -252,7 +299,10 @@ def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
     elif "SNOWFLAKE_PASSWORD" in os.environ:
         connect_kwargs["password"] = os.environ["SNOWFLAKE_PASSWORD"]
     else:
-        raise ValueError("Must provide either SNOWFLAKE_PRIVATE_KEY_PATH or SNOWFLAKE_PASSWORD")
+        raise ValueError(
+            "Must provide either SNOWFLAKE_PRIVATE_KEY_PATH or "
+            "SNOWFLAKE_PASSWORD"
+        )
 
     return snowflake.connector.connect(**connect_kwargs)
 
@@ -263,7 +313,9 @@ def get_stage_name() -> str:
     return os.environ.get("SNOWFLAKE_STAGE", f"{db}.{schema}.F1_RAW_STAGE")
 
 
-def ensure_stage(conn: snowflake.connector.SnowflakeConnection, stage_name: str) -> None:
+def ensure_stage(
+    conn: snowflake.connector.SnowflakeConnection, stage_name: str
+) -> None:
     conn.cursor().execute(
         f"""
         CREATE STAGE IF NOT EXISTS {stage_name}
@@ -279,14 +331,25 @@ def put_dataset_files_to_stage(
     stage_name: str,
 ) -> int:
     dataset_dir = get_raw_data_dir() / dataset
-    files = list(dataset_dir.rglob("*.ndjson.gz")) if dataset_dir.exists() else []
+    files = (
+        list(dataset_dir.rglob("*.ndjson.gz"))
+        if dataset_dir.exists()
+        else []
+    )
 
     for path in files:
         conn.cursor().execute(
-            f"PUT 'file://{path.as_posix()}' @{stage_name}/{dataset}/ AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
+            f"PUT 'file://{path.as_posix()}' @{stage_name}/{dataset}/ "
+            "AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
         )
 
-    logger.info("Staged %d %s file(s) to @%s/%s/", len(files), dataset, stage_name, dataset)
+    logger.info(
+        "Staged %d %s file(s) to @%s/%s/",
+        len(files),
+        dataset,
+        stage_name,
+        dataset,
+    )
     return len(files)
 
 
@@ -330,7 +393,9 @@ def load_dataset_to_snowflake(
         ON_ERROR = 'CONTINUE'
         """
     )
-    logger.info("Loaded @%s/%s/ into %s", stage_name, dataset, qualified_table_name)
+    logger.info(
+        "Loaded @%s/%s/ into %s", stage_name, dataset, qualified_table_name
+    )
 
 
 def load_all_datasets_to_snowflake() -> None:
@@ -352,7 +417,11 @@ def run(start_year: int, end_year: int, run_id: str | None = None) -> None:
 
     session_keys = list_race_session_keys(start_year, end_year)
     if not session_keys:
-        logger.warning("No race sessions found for %d-%d; nothing to do", start_year, end_year)
+        logger.warning(
+            "No race sessions found for %d-%d; nothing to do",
+            start_year,
+            end_year,
+        )
         return
 
     client = OpenF1Client()
