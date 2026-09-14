@@ -17,7 +17,8 @@ done
 echo "Kafka Connect is up."
 
 if [ ! -f "${KEY_PATH}" ]; then
-  echo "Private key not found at ${KEY_PATH} -- mount it via the secrets volume." >&2
+  echo "Private key not found at ${KEY_PATH}." >&2
+  echo "Mount it via the secrets volume." >&2
   exit 1
 fi
 

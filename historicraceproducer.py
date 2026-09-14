@@ -6,7 +6,9 @@ from collections import deque
 from kafka import KafkaProducer
 from telemetryIngester import OpenF1Client
 
-KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(",")
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
+    "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
+).split(",")
 
 
 # ============================================================
@@ -124,8 +126,8 @@ try:
     limiter.wait_and_record()
 
     sessions = client.get_sessions(
-        year=2025,
-        country_name="Las Vegas",
+        year=2026,
+        country_name="Spain",
         session_name="Race"
     )
 

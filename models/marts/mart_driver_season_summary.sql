@@ -20,10 +20,13 @@ season_agg as (
         sum(avg_lap_duration_seconds * valid_lap_count)
             / nullif(sum(valid_lap_count), 0) as avg_lap_duration_seconds,
         sum(lap_time_coefficient_of_variation * valid_lap_count)
-            / nullif(sum(valid_lap_count), 0) as avg_lap_time_coefficient_of_variation,
-        avg(degradation_slope_seconds_per_lap) as avg_degradation_slope_seconds_per_lap,
+            / nullif(sum(valid_lap_count), 0)
+            as avg_lap_time_coefficient_of_variation,
+        avg(degradation_slope_seconds_per_lap)
+            as avg_degradation_slope_seconds_per_lap,
         sum(pit_stop_count) as total_pit_stops,
-        sum(total_pit_duration_seconds) / nullif(sum(pit_stop_count), 0) as avg_pit_duration_seconds
+        sum(total_pit_duration_seconds) / nullif(sum(pit_stop_count), 0)
+            as avg_pit_duration_seconds
     from race_pace
     group by driver_number, season_year
 ),
@@ -57,7 +60,11 @@ incidents as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['a.driver_number', 'a.season_year']) }} as driver_season_key,
+    {{
+        dbt_utils.generate_surrogate_key(
+            ['a.driver_number', 'a.season_year']
+        )
+    }} as driver_season_key,
     a.driver_number,
     a.season_year,
     li.driver_full_name,

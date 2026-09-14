@@ -8,9 +8,6 @@ __pycache__/
 secrets/*
 !secrets/.gitkeep
 
-# Kafka Connect config with embedded Snowflake credentials/private key
-snowflake-sink-connector.json
-
 # dbt
 target/
 logs/

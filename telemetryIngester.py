@@ -101,13 +101,15 @@ class OpenF1Client:
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                response = self._session.get(url, params=params, timeout=self.timeout)
+                response = self._session.get(
+                    url, params=params, timeout=self.timeout
+                )
             except requests.exceptions.RequestException as exc:
                 last_error = exc
                 self._sleep_before_retry(attempt)
                 continue
 
-            # OpenF1 returns 404 with {"detail": "No results found."} when a time 
+            # OpenF1 returns 404 when a time range or filter query contains no
             # range or filter query contains no matching events.
             if response.status_code == 404:
                 return []
@@ -116,29 +118,37 @@ class OpenF1Client:
             if response.status_code == 429:
                 retry_after_hdr = response.headers.get("Retry-After")
                 retry_after = (
-                    float(retry_after_hdr) 
-                    if retry_after_hdr and retry_after_hdr.isdigit() 
+                    float(retry_after_hdr)
+                    if retry_after_hdr and retry_after_hdr.isdigit()
                     else self.backoff_seconds * (2 ** (attempt - 1))
                 )
-                last_error = OpenF1Error(f"Rate limited (429): {response.text[:200]}")
+                last_error = OpenF1Error(
+                    f"Rate limited (429): {response.text[:200]}"
+                )
                 time.sleep(retry_after)
                 continue
 
             if 500 <= response.status_code < 600:
-                last_error = OpenF1Error(f"{response.status_code} from OpenF1: {response.text[:200]}")
+                last_error = OpenF1Error(
+                    f"{response.status_code} from OpenF1: "
+                    f"{response.text[:200]}"
+                )
                 self._sleep_before_retry(attempt)
                 continue
 
             if not response.ok:
                 raise OpenF1Error(
-                    f"OpenF1 request failed ({response.status_code}) for {response.url}: "
+                    f"OpenF1 request failed ({response.status_code}) for "
                     f"{response.text[:300]}"
                 )
 
             return response.json()
 
-        raise OpenF1Error(f"OpenF1 request failed after {self.max_retries} attempts: {last_error}")
-    
+        raise OpenF1Error(
+            f"OpenF1 request failed after {self.max_retries} attempts: "
+            f"{last_error}"
+        )
+
     def _sleep_before_retry(self, attempt: int) -> None:
         time.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
 
@@ -379,7 +389,7 @@ class OpenF1Client:
             **filters,
         )
 
-    # -- session result ---------------------------------------------------------
+    # -- session result ---------------------------------------------------
 
     def get_session_result(
         self,
@@ -462,19 +472,30 @@ class OpenF1Client:
 if __name__ == "__main__":
     client = OpenF1Client()
 
-    sessions = client.get_sessions(year=2025, country_name="Netherlands", session_name="Race")
+    sessions = client.get_sessions(
+        year=2025, country_name="Netherlands", session_name="Race"
+    )
     for s in sessions:
         print(s["session_key"], s["session_name"], s["date_start"])
 
     # Example: drivers from the 2023 Singapore GP practice session
     drivers = client.get_drivers(session_key=s["session_key"])
     for d in drivers[:5]:
-        print(f"#{d['driver_number']:>2}  {d['full_name']:<20}  {d['team_name']}")
+        print(
+            f"#{d['driver_number']:>2}  {d['full_name']:<20}  "
+            f"{d['team_name']}"
+        )
 
     # Example: laps under 92s for one driver, using an operator filter
-    laps = client.get_laps(session_key=s["session_key"], driver_number=63, lap_duration__lt=92)
+    laps = client.get_laps(
+        session_key=s["session_key"],
+        driver_number=63,
+        lap_duration__lt=92,
+    )
     print(f"\n{len(laps)} laps under 92s for #63")
 
     # Example: high-speed telemetry samples
-    fast_samples = client.get_car_data(session_key=s["session_key"], driver_number=55)
+    fast_samples = client.get_car_data(
+        session_key=s["session_key"], driver_number=55
+    )
     print(f"{len(fast_samples)} samples at >=315 km/h for #55")

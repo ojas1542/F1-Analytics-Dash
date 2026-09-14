@@ -1,6 +1,6 @@
-use axum::{Router, extract::State, routing::get};
+use axum::{extract::State, routing::get, Router};
 use prometheus_client::{
-    encoding::{EncodeLabelSet, text::encode},
+    encoding::{text::encode, EncodeLabelSet},
     metrics::{counter::Counter, family::Family, gauge::Gauge},
     registry::Registry,
 };
@@ -11,8 +11,8 @@ use serde::Deserialize;
 use std::{
     error::Error,
     sync::{
-        Arc, Mutex,
         atomic::{AtomicI64, AtomicU64},
+        Arc, Mutex,
     },
 };
 
@@ -247,8 +247,10 @@ async fn metrics_handler(State(registry): State<AppState>) -> String {
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
-    let metrics_port = std::env::var("METRICS_PORT").unwrap_or_else(|_| "9184".to_string());
+    let brokers = std::env::var("KAFKA_BROKERS")
+        .unwrap_or_else(|_| "localhost:9092".to_string());
+    let metrics_port =
+        std::env::var("METRICS_PORT").unwrap_or_else(|_| "9184".to_string());
     let group_id = "f1-telemetry-processor-group";
 
     let topics = ["car_data", "laps", "pit", "race_control"];
@@ -281,9 +283,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let listener = tokio::net::TcpListener::bind(&metrics_bind_addr)
             .await
-            .unwrap_or_else(|e| panic!("Failed to bind metrics server on {metrics_bind_addr}: {e}"));
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to bind metrics server on {metrics_bind_addr}: {e}"
+                )
+            });
 
-        println!("Prometheus metrics available at http://{metrics_bind_addr}/metrics");
+        println!(
+            "Prometheus metrics available at http://{metrics_bind_addr}/metrics"
+        );
 
         axum::serve(listener, app)
             .await
@@ -342,9 +350,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // CAR TELEMETRY
                         // ====================================================
                         "car_data" => {
-                            match serde_json::from_slice::<CarTelemetry>(payload_bytes) {
+                            match serde_json::from_slice::<CarTelemetry>(
+                                payload_bytes,
+                            ) {
                                 Ok(data) => {
-                                    let driver = data.driver_number.unwrap_or(0).to_string();
+                                    let driver = data
+                                        .driver_number
+                                        .unwrap_or(0)
+                                        .to_string();
 
                                     let label = DriverLabel {
                                         driver: driver.clone(),
@@ -352,37 +365,58 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                     // Speed
                                     if let Some(value) = data.speed {
-                                        metrics.speed.get_or_create(&label).set(value);
+                                        metrics
+                                            .speed
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Throttle
                                     if let Some(value) = data.throttle {
-                                        metrics.throttle.get_or_create(&label).set(value);
+                                        metrics
+                                            .throttle
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Brake
                                     if let Some(value) = data.brake {
-                                        metrics.brake.get_or_create(&label).set(value);
+                                        metrics
+                                            .brake
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Gear
                                     if let Some(value) = data.gear {
-                                        metrics.gear.get_or_create(&label).set(value as i64);
+                                        metrics
+                                            .gear
+                                            .get_or_create(&label)
+                                            .set(value as i64);
                                     }
 
                                     // RPM
                                     if let Some(value) = data.rpm {
-                                        metrics.rpm.get_or_create(&label).set(value as i64);
+                                        metrics
+                                            .rpm
+                                            .get_or_create(&label)
+                                            .set(value as i64);
                                     }
 
                                     println!(
-                                        "[CAR_DATA] Driver #{} | Speed: {:?} km/h | Gear: {:?}",
+                                        concat!(
+                                            "[CAR_DATA] Driver #{} | ",
+                                            "Speed: {:?} km/h | Gear: {:?}"
+                                        ),
                                         driver, data.speed, data.gear
                                     );
                                 }
 
                                 Err(e) => {
-                                    eprintln!("Failed to deserialize car_data: {:?}", e);
+                                    eprintln!(
+                                        "Failed to deserialize car_data: {:?}",
+                                        e
+                                    );
 
                                     metrics.deserialization_errors.inc();
                                 }
@@ -393,9 +427,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // LAP DATA
                         // ====================================================
                         "laps" => {
-                            match serde_json::from_slice::<LapData>(payload_bytes) {
+                            match serde_json::from_slice::<LapData>(
+                                payload_bytes,
+                            ) {
                                 Ok(data) => {
-                                    let driver = data.driver_number.unwrap_or(0).to_string();
+                                    let driver = data
+                                        .driver_number
+                                        .unwrap_or(0)
+                                        .to_string();
 
                                     let label = DriverLabel {
                                         driver: driver.clone(),
@@ -403,37 +442,63 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                     // Lap number
                                     if let Some(value) = data.lap_number {
-                                        metrics.lap_number.get_or_create(&label).set(value as i64);
+                                        metrics
+                                            .lap_number
+                                            .get_or_create(&label)
+                                            .set(value as i64);
                                     }
 
                                     // Lap duration
                                     if let Some(value) = data.lap_duration {
-                                        metrics.lap_duration.get_or_create(&label).set(value);
+                                        metrics
+                                            .lap_duration
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Sector 1
-                                    if let Some(value) = data.duration_sector_1 {
-                                        metrics.sector_1_duration.get_or_create(&label).set(value);
+                                    if let Some(value) = data.duration_sector_1
+                                    {
+                                        metrics
+                                            .sector_1_duration
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Sector 2
-                                    if let Some(value) = data.duration_sector_2 {
-                                        metrics.sector_2_duration.get_or_create(&label).set(value);
+                                    if let Some(value) = data.duration_sector_2
+                                    {
+                                        metrics
+                                            .sector_2_duration
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     // Sector 3
-                                    if let Some(value) = data.duration_sector_3 {
-                                        metrics.sector_3_duration.get_or_create(&label).set(value);
+                                    if let Some(value) = data.duration_sector_3
+                                    {
+                                        metrics
+                                            .sector_3_duration
+                                            .get_or_create(&label)
+                                            .set(value);
                                     }
 
                                     println!(
-                                        "[LAP_EVENT] Driver #{} | Lap {:?} | Time: {:?}s",
-                                        driver, data.lap_number, data.lap_duration
+                                        concat!(
+                                            "[LAP_EVENT] Driver #{} | ",
+                                            "Lap {:?} | Time: {:?}s"
+                                        ),
+                                        driver,
+                                        data.lap_number,
+                                        data.lap_duration,
                                     );
                                 }
 
                                 Err(e) => {
-                                    eprintln!("Failed to deserialize laps: {:?}", e);
+                                    eprintln!(
+                                        "Failed to deserialize laps: {:?}",
+                                        e
+                                    );
 
                                     metrics.deserialization_errors.inc();
                                 }
@@ -443,22 +508,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // ====================================================
                         // PIT DATA
                         // ====================================================
-                        "pit" => match serde_json::from_slice::<PitData>(payload_bytes) {
+                        "pit" => match serde_json::from_slice::<PitData>(
+                            payload_bytes,
+                        ) {
                             Ok(data) => {
-                                let driver = data.driver_number.unwrap_or(0).to_string();
+                                let driver =
+                                    data.driver_number.unwrap_or(0).to_string();
 
                                 let label = DriverLabel {
                                     driver: driver.clone(),
                                 };
 
                                 if let Some(value) = data.pit_duration {
-                                    metrics.pit_duration.get_or_create(&label).set(value);
+                                    metrics
+                                        .pit_duration
+                                        .get_or_create(&label)
+                                        .set(value);
                                 }
 
                                 metrics.pit_stops.get_or_create(&label).inc();
 
                                 println!(
-                                    "[PIT_STOP] Driver #{} | Duration: {:?}s | Lap {:?}",
+                                    concat!(
+                                        "[PIT_STOP] Driver #{} | ",
+                                        "Duration: {:?}s | Lap {:?}"
+                                    ),
                                     driver, data.pit_duration, data.lap_number
                                 );
                             }
@@ -474,10 +548,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // RACE CONTROL
                         // ====================================================
                         "race_control" => {
-                            match serde_json::from_slice::<RaceControlData>(payload_bytes) {
+                            match serde_json::from_slice::<RaceControlData>(
+                                payload_bytes,
+                            ) {
                                 Ok(data) => {
                                     println!(
-                                        "[RACE_CONTROL] Flag: {} | Message: {} | Scope: {} | Sector: {:?}",
+                                        concat!(
+                                            "[RACE_CONTROL] Flag: {} | ",
+                                            "Message: {} | Scope: {} | ",
+                                            "Sector: {:?}"
+                                        ),
                                         data.flag.as_deref().unwrap_or("NONE"),
                                         data.message.as_deref().unwrap_or(""),
                                         data.scope.as_deref().unwrap_or(""),
@@ -486,7 +566,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 }
 
                                 Err(e) => {
-                                    eprintln!("Failed to deserialize race_control: {:?}", e);
+                                    eprintln!(
+                                        concat!(
+                                            "Failed to deserialize ",
+                                            "race_control: {:?}"
+                                        ),
+                                        e
+                                    );
 
                                     metrics.deserialization_errors.inc();
                                 }
@@ -498,7 +584,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // ====================================================
                         _ => {
                             println!(
-                                "Received message from unexpected topic: {} | Key: {}",
+                                concat!(
+                                    "Received unexpected topic: {} | ",
+                                    "Key: {}"
+                                ),
                                 topic, key
                             );
                         }

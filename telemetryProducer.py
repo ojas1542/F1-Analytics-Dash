@@ -25,7 +25,9 @@ from kafka import KafkaProducer
 
 from telemetryIngester import OpenF1Client
 
-KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(",")
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
+    "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
+).split(",")
 OPENF1_API_TOKEN = os.environ.get("OPENF1_API_TOKEN")
 
 # Set all three to poll a specific past session instead of the live one
@@ -37,7 +39,7 @@ SESSION_NAME = os.environ.get("SESSION_NAME")
 
 
 class TieredRateLimiter:
-    """Per-endpoint polling cadence layered under one global request-rate cap."""
+    """Poll each endpoint under a shared global request-rate cap."""
 
     def __init__(self, global_max_sec: int = 6, global_max_min: int = 60):
         self.global_max_sec = global_max_sec
@@ -64,9 +66,13 @@ class TieredRateLimiter:
 
             sleep_needed = 0.0
             if len(self.min_timestamps) >= self.global_max_min:
-                sleep_needed = max(sleep_needed, self.min_timestamps[0] + 60.0 - now)
+                sleep_needed = max(
+                    sleep_needed, self.min_timestamps[0] + 60.0 - now
+                )
             if len(self.sec_timestamps) >= self.global_max_sec:
-                sleep_needed = max(sleep_needed, self.sec_timestamps[0] + 1.0 - now)
+                sleep_needed = max(
+                    sleep_needed, self.sec_timestamps[0] + 1.0 - now
+                )
 
             if sleep_needed > 0:
                 print(f"[GLOBAL LIMIT] Sleeping {sleep_needed:.2f}s...")
@@ -131,7 +137,9 @@ def main():
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        key_serializer=lambda k: str(k).encode("utf-8") if k is not None else None,
+        key_serializer=lambda k: (
+            str(k).encode("utf-8") if k is not None else None
+        ),
         acks="all",
     )
 
@@ -145,7 +153,9 @@ def main():
     car_data_poller = IncrementalPoller(client.get_car_data, date_field="date")
     laps_poller = IncrementalPoller(client.get_laps, date_field="date_start")
     pit_poller = IncrementalPoller(client.get_pit, date_field="date")
-    race_control_poller = IncrementalPoller(client.get_race_control, date_field="date")
+    race_control_poller = IncrementalPoller(
+        client.get_race_control, date_field="date"
+    )
 
     print("Starting live telemetry producer...\n")
 
@@ -156,24 +166,39 @@ def main():
                 limiter.wait_and_record("car_data")
                 records = car_data_poller.poll(session_key=session_key)
                 for item in records:
-                    send_event(producer, "car_data", item.get("driver_number"), item)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] car_data: {len(records)} new")
+                    send_event(
+                        producer, "car_data", item.get("driver_number"), item
+                    )
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] "
+                    f"car_data: {len(records)} new"
+                )
 
             # Lap data (medium priority): every 15s -> 4 API calls/min
             if limiter.is_type_due("laps", interval_seconds=15.0):
                 limiter.wait_and_record("laps")
                 records = laps_poller.poll(session_key=session_key)
                 for item in records:
-                    send_event(producer, "laps", item.get("driver_number"), item)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] laps: {len(records)} new")
+                    send_event(
+                        producer, "laps", item.get("driver_number"), item
+                    )
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] "
+                    f"laps: {len(records)} new"
+                )
 
             # Pit stops (medium priority): every 20s -> 3 API calls/min
             if limiter.is_type_due("pit", interval_seconds=20.0):
                 limiter.wait_and_record("pit")
                 records = pit_poller.poll(session_key=session_key)
                 for item in records:
-                    send_event(producer, "pit", item.get("driver_number"), item)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] pit: {len(records)} new")
+                    send_event(
+                        producer, "pit", item.get("driver_number"), item
+                    )
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] "
+                    f"pit: {len(records)} new"
+                )
 
             # Race control (low priority): every 30s -> 2 API calls/min
             if limiter.is_type_due("race_control", interval_seconds=30.0):
@@ -181,7 +206,10 @@ def main():
                 records = race_control_poller.poll(session_key=session_key)
                 for item in records:
                     send_event(producer, "race_control", "GLOBAL", item)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] race_control: {len(records)} new")
+                print(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] "
+                    f"race_control: {len(records)} new"
+                )
 
             producer.flush()
             time.sleep(0.1)
