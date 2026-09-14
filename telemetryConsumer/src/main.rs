@@ -290,10 +290,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             });
 
         println!(
-            concat!(
-                "Prometheus metrics available at ",
-                "http://{metrics_bind_addr}/metrics"
-            )
+            "Prometheus metrics available at http://{metrics_bind_addr}/metrics"
         );
 
         axum::serve(listener, app)
